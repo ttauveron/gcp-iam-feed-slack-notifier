@@ -1,10 +1,10 @@
 {
-  "insertId": "mroosre2sggr",
+  "insertId": "qooxthe3spkb",
   "logName": "projects/mercurial-feat-386023/logs/cloudaudit.googleapis.com%2Factivity",
   "protoPayload": {
     "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
     "authenticationInfo": {
-      "principalEmail": "admin@example.com"
+      "principalEmail": "thibaut.tauveron@gmail.com"
     },
     "authorizationInfo": [
       {
@@ -21,7 +21,7 @@
       "destinationAttributes": {},
       "requestAttributes": {
         "auth": {},
-        "time": "2025-08-19T03:22:55.015971427Z"
+        "time": "2025-08-21T10:00:24.625388693Z"
       }
     },
     "resourceLocation": {
@@ -35,19 +35,13 @@
       "policyDelta": {
         "bindingDeltas": [
           {
-            "action": "REMOVE",
-            "member": "user:bob@example.com",
-            "role": "roles/storage.objectAdmin"
-          },
-          {
             "action": "ADD",
-            "member": "user:bob@example.com",
-            "role": "roles/storage.objectViewer"
-          },
-          {
-            "action": "ADD",
-            "member": "user:bob@example.com",
-            "role": "roles/storage.objectAdmin"
+            "condition": {
+              "expression": "request.time < timestamp(\"2025-08-22T22:00:00.000Z\")",
+              "title": "temp"
+            },
+            "member": "user:thibaut.tauveron@gmail.com",
+            "role": "roles/storage.bucketViewer"
           }
         ]
       }
@@ -55,7 +49,7 @@
     "serviceName": "storage.googleapis.com",
     "status": {}
   },
-  "receiveTimestamp": "2025-08-19T03:22:57.228165008Z",
+  "receiveTimestamp": "2025-08-21T10:00:26.022491487Z",
   "resource": {
     "labels": {
       "bucket_name": "test-3247",
@@ -65,5 +59,5 @@
     "type": "gcs_bucket"
   },
   "severity": "NOTICE",
-  "timestamp": "2025-08-19T03:22:55.010100721Z"
+  "timestamp": "2025-08-21T10:00:24.618693819Z"
 }

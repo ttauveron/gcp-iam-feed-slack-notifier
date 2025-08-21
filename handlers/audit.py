@@ -1,13 +1,13 @@
 import logging
 import re
-from collections import defaultdict
-from typing import Dict, Any
+from typing import Any, Dict
 
 from lib.logs_url import build_log_url, logs_query_bucket_adds
 from lib.slack import send_slack_message
 
 
 def process_audit_logs(msg: Dict[str, Any], slack_token: str, channel: str) -> None:
+    """GCS Admin Activity audit log handler — includes raw condition dicts like asset feed."""
     pp = msg.get("protoPayload", {}) or {}
     res = msg.get("resource", {}) or {}
     labels = res.get("labels", {}) or {}
@@ -20,14 +20,14 @@ def process_audit_logs(msg: Dict[str, Any], slack_token: str, channel: str) -> N
         logging.debug("Not a GCS SetIamPolicy event.")
         return
 
-    deltas = (
-            pp.get("serviceData", {}).get("policyDelta", {}).get("bindingDeltas", []) or []
-    )
+    # Keep only ADD binding deltas
+    deltas = (pp.get("serviceData", {}).get("policyDelta", {}).get("bindingDeltas", []) or [])
     adds = [d for d in deltas if d.get("action") == "ADD"]
     if not adds:
         logging.info("Bucket IAM change has no ADD actions; skipping notify.")
         return
 
+    # Resource details
     bucket = labels.get("bucket_name")
     if not bucket:
         rn = pp.get("resourceName", "")
@@ -38,22 +38,23 @@ def process_audit_logs(msg: Dict[str, Any], slack_token: str, channel: str) -> N
     actor = pp.get("authenticationInfo", {}).get("principalEmail", "unknown")
     ts = msg.get("timestamp") or ""
 
-    role_to_members = defaultdict(list)
-    for d in adds:
-        role_to_members[d.get("role", "unknown-role")].append(d.get("member", "unknown-member"))
+    url = build_log_url(logs_query_bucket_adds(bucket), ts, "project", project_id)
 
-    query = logs_query_bucket_adds(bucket)
-    url = build_log_url(query, ts, "project", project_id)
-
+    # Compose Slack message
     lines = [
         f":information_source: New Role Grant in `{project_id}`",
         "*Asset Type:* storage.googleapis.com/Bucket",
         f"*Bucket:* {bucket}",
         f"*Actor:* {actor}",
     ]
-    for role, members in sorted(role_to_members.items()):
+
+    for d in adds:
+        role = d.get("role", "unknown-role")
+        member = d.get("member", "unknown-member")
         lines.append(f"*Role:* {role}")
-        lines.append(f"*Granted to:* {sorted(set(members))}")
+        lines.append(f"*Granted to:* [{member}]")
+        if d.get("condition"):
+            lines.append(f"*With condition:* {d['condition']}")
         lines.append(f"*<{url}|Browse Audit Logs>*")
 
     send_slack_message(slack_token, channel, "\n".join(lines))
