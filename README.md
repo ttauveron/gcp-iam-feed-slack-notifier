@@ -17,6 +17,13 @@ Install everything for local development (tests, lint, type-checks):
 pip install -r requirements-dev.txt
 ```
 
+#### Test Locally
+```
+export SLACK_TOKEN=xoxb-xxxxxxr
+export SLACK_CHANNEL=#my_channel
+python main.py ./tests/fixtures/asset_project.json
+```
+
 ### Cloud Setup Example
 
 Create a topic named "iam-changes-feed"
