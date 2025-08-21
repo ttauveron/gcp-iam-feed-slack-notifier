@@ -1,6 +1,5 @@
 import logging
 import re
-from typing import Dict, Any, List
 
 from lib.gcp import crm_client
 from lib.logs_url import build_log_url, logs_query_activity
@@ -8,29 +7,69 @@ from lib.slack import send_slack_message
 
 IGNORED_ASSET_TYPES = {"storage.googleapis.com/Bucket"}
 
+from typing import Dict, Any, List, Optional, Tuple, Set
+
+
+def _cond_key(cond: Optional[Dict[str, Any]]) -> Tuple:
+    """Stable, comparable key for a condition dict (None → unique sentinel)."""
+    if not cond:
+        return ("∅",)  # unconditional
+    # Use a minimal normalized tuple; adjust fields if you care about more.
+    return ("cond", cond.get("expression"), cond.get("title"), cond.get("description"))
+
 
 def _compute_deltas(asset_json: Dict[str, Any]) -> List[Dict[str, Any]]:
-    new_bindings = {b["role"]: b for b in asset_json.get("asset", {}).get("iamPolicy", {}).get("bindings", [])}
-    old_bindings = {b["role"]: b for b in asset_json.get("priorAsset", {}).get("iamPolicy", {}).get("bindings", [])}
+    asset = (asset_json.get("asset") or {})
+    prior = (asset_json.get("priorAsset") or {})
 
-    deltas = []
-    for role, new_b in new_bindings.items():
-        old_b = old_bindings.get(role)
-        new_members = set(new_b.get("members", []))
-        old_members = set(old_b.get("members", [])) if old_b else set()
-        added_members = sorted(new_members - old_members)
+    new_bindings: List[Dict[str, Any]] = (asset.get("iamPolicy", {}) or {}).get("bindings", []) or []
+    old_bindings: List[Dict[str, Any]] = (prior.get("iamPolicy", {}) or {}).get("bindings", []) or []
 
-        new_cond = new_b.get("condition")
-        old_cond = old_b.get("condition") if old_b else None
-        cond_changed = (new_cond or None) != (old_cond or None)
+    # Index old by (role, cond_key) -> set(members)
+    old_index: Dict[Tuple[str, Tuple], Set[str]] = {}
+    for ob in old_bindings:
+        role = ob.get("role")
+        if not role:
+            continue
+        ck = _cond_key(ob.get("condition"))
+        members = set(ob.get("members", []) or [])
+        old_index[(role, ck)] = members
 
-        if added_members or (old_b and cond_changed):
+    deltas: List[Dict[str, Any]] = []
+
+    # Compare new against old with the same (role, condition)
+    for nb in new_bindings:
+        role = nb.get("role")
+        if not role:
+            continue
+        cond = nb.get("condition")
+        ck = _cond_key(cond)
+
+        new_members = set(nb.get("members", []) or [])
+        if not new_members:
+            continue  # nothing to report
+
+        prev_members = old_index.get((role, ck), set())
+        added = sorted(new_members - prev_members)
+
+        if (role, ck) not in old_index:
+            # No prior binding for this (role, condition) → report the whole binding (legacy behavior)
             deltas.append({
                 "role": role,
-                "members": added_members if added_members else sorted(new_members),
-                "condition": new_cond,
-                "change": "members_added" if added_members else "condition_changed",
+                "members": sorted(new_members),
+                "condition": cond,
+                "change": "members_added",
             })
+        elif added:
+            # Same (role, condition) existed → report only newly added members
+            deltas.append({
+                "role": role,
+                "members": added,
+                "condition": cond,
+                "change": "members_added",
+            })
+        # else: no net additions for this (role, condition) → no delta
+
     return deltas
 
 
