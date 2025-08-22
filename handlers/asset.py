@@ -130,11 +130,21 @@ def process_feeds(msg: Dict[str, Any], slack_token: str, channel: str) -> None:
         f"*Asset Name:* {asset_name}",
     ]
 
+    ignore_count = 0
     for b in deltas:
+        b["members"] = [
+            member for member in b["members"]
+            if not any(s in member for s in ["projectEditor", "projectOwner", "projectViewer"])
+        ]
+        if len(b["members"]) == 0:
+            ignore_count += 1
+            continue
+
         lines.append(f"*Role:* {b['role']}")
         lines.append(f"*Granted to:* {b['members']}")
         if b.get("condition"):
             lines.append(f"*With condition:* {b['condition']}")
         lines.append(f"*<{url}|Browse Audit Logs>*")
 
-    send_slack_message(slack_token, channel, "\n".join(lines))
+    if ignore_count != len(deltas):
+        send_slack_message(slack_token, channel, "\n".join(lines))
