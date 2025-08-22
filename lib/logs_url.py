@@ -1,14 +1,13 @@
 import urllib.parse
 
 
-def build_log_url(query: str, around_rfc3339: str, scope_key: str, scope_value: str) -> str:
-    q_enc = urllib.parse.quote(query, safe="")
-    # Semicolon-delimited parameters (no "?")
-    return (
-        "https://console.cloud.google.com/logs/query;"
-        f"query={q_enc};aroundTime={around_rfc3339};duration=PT2M;"
-        f"{scope_key}={scope_value}"
-    )
+def build_log_url(query: str, update_time: str, scope_key: str, scope_value: str) -> str:
+    log_query = urllib.parse.quote(query, safe='')
+    log_query = log_query.replace('%28', '%2528')
+    log_query = log_query.replace('%29', '%2529')
+    log_url_params = f'query={log_query};aroundTime={update_time};duration=PT2M?{scope_key}={scope_value}'
+    log_url = f'https://console.cloud.google.com/logs/query;{log_url_params}'
+    return log_url
 
 
 def logs_query_activity(service_name: str, resource_name: str) -> str:
